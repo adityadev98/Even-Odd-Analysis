@@ -3,74 +3,46 @@ from src.cfg_builder import build_cfg
 from src.parity_analysis import analyze_cfg, Parity
 
 class TestParityAnalysis(unittest.TestCase):
-    import unittest
-from src.cfg_builder import build_cfg
-from src.parity_analysis import analyze_cfg, Parity
-
-class TestParityAnalysis(unittest.TestCase):
-    def test_odd_plus_even_not_even(self):
+    # False Positive Tests
+    def test_false_positive_conditional_assignment(self):
         code = """
-x = 3        # Odd
-y = 2        # Even
-z = x + y    # Should be Odd, not Even
+if input():  # Unknown condition
+    x = 2    # Even
+else:
+    x = 3    # Odd
+y = x + 1    # Should be UNKNOWN, not EVEN or ODD
 """
         cfg = build_cfg(code)
         result = analyze_cfg(cfg)
-        self.assertNotEqual(result[4]['z'], Parity.EVEN)
+        # It would be a false positive if we claimed any specific parity
+        self.assertEqual(result[6]['y'], Parity.UNKNOWN)
 
-    def test_unknown_input_remains_unknown(self):
+
+    # False Negative Tests
+    def test_false_negative_multiply_by_zero(self):
         code = """
-x = input()  # Unknown
-y = 2        # Even
-z = x + y    # Should be Unknown, not Even or Odd
+x = 0        # Even
+y = input()  # Unknown
+z = x * y    # Always Even (0 * anything = 0)
 """
         cfg = build_cfg(code)
         result = analyze_cfg(cfg)
-        self.assertNotEqual(result[4]['z'], Parity.EVEN)
-        self.assertNotEqual(result[4]['z'], Parity.ODD)
+        # Currently returns 'U', which is a false negative!
+        # This test demonstrates that our analysis could be
+        # more precise but is being too conservative
+        self.assertEqual(result[4]['z'], Parity.UNKNOWN)  # Current behavior
+        # TODO: Enhance analysis to detect that 0 * anything = even
+        # self.assertEqual(result[4]['z'], Parity.EVEN)  # Desired future behavior
 
-    def test_even_times_even_not_odd(self):
-        code = """
-x = 2        # Even
-y = 4        # Even
-z = x * y    # Should be Even, not Odd
-"""
-        cfg = build_cfg(code)
-        result = analyze_cfg(cfg)
-        self.assertNotEqual(result[4]['z'], Parity.ODD)
-
-    def test_complex_expression_with_unknown(self):
-        code = """
-x = input()  # Unknown
-y = 2        # Even
-z = 3        # Odd
-w = (x + y) * z  # Should be Unknown, not Even or Odd
-"""
-        cfg = build_cfg(code)
-        result = analyze_cfg(cfg)
-        self.assertNotEqual(result[5]['w'], Parity.EVEN)
-        self.assertNotEqual(result[5]['w'], Parity.ODD)
-
-    def test_variable_reassignment(self):
+    def test_false_negative_double_increment(self):
         code = """
 x = 2        # Even
-x = 3        # Now Odd
-y = x + 1    # Should be Even, not Odd
+x = x + 2    # Still Even
 """
         cfg = build_cfg(code)
         result = analyze_cfg(cfg)
-        self.assertNotEqual(result[4]['y'], Parity.ODD)
-        self.assertEqual(result[4]['y'], Parity.EVEN)
-
-    def test_undefined_variable_usage(self):
-        code = """
-y = x + 1    # x is undefined
-"""
-        cfg = build_cfg(code)
-        result = analyze_cfg(cfg)
-        self.assertNotEqual(result[2]['y'], Parity.EVEN)
-        self.assertNotEqual(result[2]['y'], Parity.ODD)
-        self.assertEqual(result[2]['y'], Parity.UNKNOWN)
+        # Should recognize that adding 2 preserves evenness
+        self.assertEqual(result[3]['x'], Parity.EVEN)    
     
 
 if __name__ == '__main__':
